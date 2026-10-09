@@ -8,8 +8,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "${APP_PORT:-8501}:8501"
+    expose:
+      - "8501"
     environment:
       GROQ_API_KEY: ${GROQ_API_KEY:?Set GROQ_API_KEY in .env}
       GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
@@ -32,6 +32,24 @@ services:
       start_period: 60s
       retries: 3
 
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    init: true
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
   db:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -50,3 +68,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
