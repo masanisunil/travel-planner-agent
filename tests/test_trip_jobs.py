@@ -59,6 +59,27 @@ class TripJobManagerTests(unittest.TestCase):
         self.assertNotIn("private", str(snapshot))
         manager.discard("failure-check")
 
+    def test_progress_is_retained_when_worker_fails_after_an_update(self):
+        manager = TripJobManager(max_workers=1)
+
+        def worker(progress):
+            progress("Flights researched", 1, 3)
+            raise RuntimeError("private provider response")
+
+        manager.start("progress-failure-check", worker, {}, 3)
+        for _ in range(100):
+            snapshot = manager.snapshot("progress-failure-check")
+            if snapshot["done"]:
+                break
+            Event().wait(0.01)
+
+        self.assertTrue(snapshot["done"])
+        self.assertEqual(snapshot["completed"], 1)
+        self.assertEqual(snapshot["steps"], ["Flights researched"])
+        self.assertEqual(snapshot["error"], "RuntimeError")
+        self.assertNotIn("private", str(snapshot))
+        manager.discard("progress-failure-check")
+
 
 if __name__ == "__main__":
     unittest.main()

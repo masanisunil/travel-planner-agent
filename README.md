@@ -18,7 +18,8 @@ hostname with Caddy-provisioned HTTPS. A hostname such as
 `44.202.146.158.sslip.io` resolves to the IP embedded in its name. Compose keeps
 Streamlit and PostgreSQL private inside Docker and persists database data and HTTPS
 certificates in named volumes. The app has no sign-in, so initially restrict HTTPS
-access to your IP.
+access to your IP. Saved trips are shared with anyone who can access the app; the
+`roam_saved_trips` table is created automatically in the configured PostgreSQL database.
 
 1. In AWS, launch an Ubuntu 24.04 EC2 instance. Start with at least 2 vCPUs and
 	4 GB RAM. Create or select an SSH key pair.

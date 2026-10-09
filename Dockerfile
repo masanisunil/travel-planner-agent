@@ -14,7 +14,7 @@ COPY requirements.txt ./requirements.txt
 RUN python -m pip install --upgrade pip \
     && python -m pip install -r requirements.txt
 
-COPY --chown=roam:roam main.py streamlit_app.py trip_jobs.py ./
+COPY --chown=roam:roam main.py streamlit_app.py trip_jobs.py saved_trips.py ./
 COPY --chown=roam:roam tools ./tools
 COPY --chown=roam:roam .streamlit ./.streamlit
 

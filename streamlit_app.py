@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 import streamlit as st
+from saved_trips import delete_trip, get_trip, list_trips, rename_trip, save_trip
 from trip_jobs import TripJobManager
 
 
@@ -218,6 +219,12 @@ def generate_trip(query, origin_city, destination_city, on_progress):
         return travel_app.get_state(config).values
 
 
+def trip_database_url():
+    from main import get_database_url
+
+    return get_database_url()
+
+
 @st.cache_resource
 def get_trip_job_manager():
     return TripJobManager(max_workers=4)
@@ -240,8 +247,13 @@ def show_trip_job(job_id):
         else:
             details = job["trip_details"]
             trip = {**details, "result": job["result"]}
-            st.session_state.trips.append(trip)
-            st.session_state.trips = st.session_state.trips[-10:]
+            try:
+                save_trip(trip_database_url(), trip)
+                st.session_state.history_error = None
+            except Exception:
+                st.session_state.history_error = (
+                    "Your itinerary is ready, but it could not be saved to trip history."
+                )
             st.session_state.active_trip = trip
             st.session_state.generation_error = None
         get_trip_job_manager().discard(job_id)
@@ -264,14 +276,25 @@ def show_trip_job(job_id):
 
 if "destination" not in st.session_state:
     st.session_state.destination = "Bengaluru"
-if "trips" not in st.session_state:
-    st.session_state.trips = []
 if "active_trip" not in st.session_state:
     st.session_state.active_trip = None
 if "generation_job_id" not in st.session_state:
     st.session_state.generation_job_id = None
 if "generation_error" not in st.session_state:
     st.session_state.generation_error = None
+if "history_error" not in st.session_state:
+    st.session_state.history_error = None
+if "delete_trip_confirmation" not in st.session_state:
+    st.session_state.delete_trip_confirmation = None
+
+try:
+    database_url = trip_database_url()
+    saved_trips = list_trips(database_url)
+    history_load_error = None
+except Exception:
+    database_url = None
+    saved_trips = []
+    history_load_error = "Saved trip history is unavailable. Check the database connection."
 
 with st.container(key="roam_topbar"):
     brand, theme_control, tagline = st.columns([1, 0.8, 1], vertical_alignment="center")
@@ -318,12 +341,67 @@ with composer, st.container(key="trip_composer"):
             travellers = st.number_input("Travellers", min_value=1, max_value=20, value=1)
             notes = st.text_area("Special requests", placeholder="Dietary needs, accessibility, places you love...")
         submitted = st.form_submit_button("Plan my escape", icon=":material/arrow_forward:", type="primary", width="stretch")
-    if st.session_state.trips:
-        st.space("small")
-        st.caption("RECENT TRIPS")
-        for trip in reversed(st.session_state.trips[-3:]):
-            if st.button(f"{trip['destination']} / {trip['duration']} days", key=f"recent_{trip['id']}", icon=":material/history:", width="stretch"):
-                st.session_state.active_trip = trip
+    st.space("small")
+    with st.expander(f"Saved trips ({len(saved_trips)})", expanded=False, icon=":material/history:"):
+        st.caption("Saved trips are shared with anyone who can access this app.")
+        if history_load_error:
+            st.warning(history_load_error)
+        elif saved_trips:
+            trip_options = {trip["id"]: trip for trip in saved_trips}
+            selected_trip_id = st.selectbox(
+                "Choose a saved trip",
+                options=list(trip_options),
+                format_func=lambda trip_id: (
+                    f"{trip_options[trip_id]['title']} · "
+                    f"{trip_options[trip_id]['duration']} days"
+                ),
+                key="saved_trip_selection",
+                label_visibility="collapsed",
+            )
+            selected_trip = trip_options[selected_trip_id]
+            with st.container(horizontal=True):
+                if st.button("Open", key="open_saved_trip", icon=":material/open_in_new:"):
+                    st.session_state.active_trip = get_trip(database_url, selected_trip_id)
+                    st.rerun()
+                with st.popover("Manage", icon=":material/more_vert:"):
+                    with st.form(f"rename_trip_{selected_trip_id}"):
+                        new_title = st.text_input("Trip name", value=selected_trip["title"])
+                        if st.form_submit_button("Save name", icon=":material/edit:"):
+                            if not new_title.strip():
+                                st.error("Enter a name for this trip.")
+                            elif rename_trip(database_url, selected_trip_id, new_title):
+                                active_trip = st.session_state.active_trip
+                                if active_trip and active_trip["id"] == selected_trip_id:
+                                    active_trip["title"] = new_title.strip()
+                                st.rerun()
+                            else:
+                                st.error("This saved trip no longer exists.")
+                    if st.button(
+                        "Delete trip",
+                        key=f"request_delete_{selected_trip_id}",
+                        icon=":material/delete:",
+                    ):
+                        st.session_state.delete_trip_confirmation = selected_trip_id
+                        st.rerun()
+            if st.session_state.delete_trip_confirmation == selected_trip_id:
+                st.warning(f"Delete '{selected_trip['title']}' permanently?")
+                confirm_column, cancel_column = st.columns(2)
+                with confirm_column:
+                    if st.button("Confirm delete", key="confirm_delete_trip", type="primary"):
+                        delete_trip(database_url, selected_trip_id)
+                        if (
+                            st.session_state.active_trip
+                            and st.session_state.active_trip["id"] == selected_trip_id
+                        ):
+                            st.session_state.active_trip = None
+                        st.session_state.delete_trip_confirmation = None
+                        st.rerun()
+                with cancel_column:
+                    if st.button("Cancel", key="cancel_delete_trip"):
+                        st.session_state.delete_trip_confirmation = None
+                        st.rerun()
+        else:
+            st.caption("Your completed itineraries will appear here.")
 
 with workspace, st.container(key="workspace"):
     if submitted:
@@ -365,6 +443,8 @@ with workspace, st.container(key="workspace"):
 
     if st.session_state.generation_error:
         st.error(st.session_state.generation_error)
+    if st.session_state.history_error:
+        st.warning(st.session_state.history_error)
     if st.session_state.generation_job_id:
         show_trip_job(st.session_state.generation_job_id)
 
@@ -372,8 +452,8 @@ with workspace, st.container(key="workspace"):
     if trip:
         result = trip["result"]
         st.caption("YOUR NEXT CHAPTER")
-        st.header(trip["destination"])
-        st.caption(f"{trip['duration']} days / {trip['date']} / {trip['budget']}")
+        st.header(trip.get("title") or trip["destination"])
+        st.caption(f"{trip['destination']} / {trip['duration']} days / {trip['date']} / {trip['budget']}")
         itinerary_tab, stays_tab, transport_tab, overview_tab = st.tabs(["Itinerary", "Places to stay", "Transport options", "Trip overview"])
         with itinerary_tab:
             st.markdown(result.get("itinerary") or "No itinerary was returned.")
@@ -392,7 +472,9 @@ with workspace, st.container(key="workspace"):
                 st.markdown(result.get("bus_results") or "No bus research was returned.")
         with overview_tab:
             messages = result.get("messages", [])
-            final = messages[-1].content if messages else "No trip overview was returned."
+            final = result.get("overview") or (
+                messages[-1].content if messages else "No trip overview was returned."
+            )
             st.markdown(final if isinstance(final, str) else str(final))
         document = (
             f"# {trip['destination']}\n\n{trip['duration']} days | {trip['date']}\n\n"
