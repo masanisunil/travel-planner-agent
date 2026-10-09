@@ -51,10 +51,11 @@ app does not provide user authentication and the initial setup uses plain HTTP.
 	nano .env
 	```
 
-	Set the three provider API keys. Generate `POSTGRES_PASSWORD` as 64 random
-	hexadecimal characters, for example with `openssl rand -hex 32`. Hex is URL-safe
-	in the app's PostgreSQL URL. Do not paste keys into source code, README files,
-	shell command arguments, or Git. Save and close the editor.
+	Set the three provider API keys and a strong `POSTGRES_PASSWORD`. The app
+	URL-encodes the database credentials, so passwords containing characters such
+	as `@` work. Keep this password the same as the one used when the database volume
+	was first initialized. Do not paste keys into source code, README files, shell
+	command arguments, or Git. Save and close the editor.
 7. Check the Compose configuration and build/start the app and database:
 
 	```bash
@@ -81,12 +82,15 @@ The initial HTTP deployment is appropriate only for restricted testing. Before
 opening it to other users or the public, put it behind HTTPS (for example, Nginx
 with Let's Encrypt or an AWS load balancer) and add authentication. Never expose
 PostgreSQL's port to the internet. For production data durability, use managed
-PostgreSQL (such as RDS) with TLS and backups; set `POSTGRES_URL` in the app's
-Compose environment to that managed database instead of the bundled `db` service.
+PostgreSQL (such as RDS) with TLS and backups; set `POSTGRES_EXTERNAL_URL` in the
+EC2 `.env` to that managed database's URL. The app URL-encodes credentials supplied
+as separate variables; credentials embedded in an external URL must already be
+percent-encoded. Never put an external database password directly in shell commands.
 
 Keep `GROQ_API_KEY`, `POSTGRES_URL`, `AVIATION_STACK_API_KEY`, and
-`TAVILY_API_KEY` in your local `.env`. Do not share or commit that file.
-URL-encode special characters in the PostgreSQL URL password.
+`TAVILY_API_KEY` in your local `.env`. Do not share or commit that file. The Docker
+deployment passes PostgreSQL host, database, user, and password separately, then
+constructs an encoded connection URL inside the app.
 
 The database must be reachable and allow checkpoint migrations. Each trip uses
 its own database connection and thread ID. Recent trips are retained for the

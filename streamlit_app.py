@@ -1,5 +1,4 @@
 from datetime import date
-import os
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -194,9 +193,9 @@ def generate_trip(query, origin_city, destination_city, on_progress):
     import psycopg
     from langchain_core.messages import HumanMessage
     from langgraph.checkpoint.postgres import PostgresSaver
-    from main import graph
+    from main import get_database_url, graph
 
-    database_url = os.getenv("POSTGRES_URL")
+    database_url = get_database_url()
     if not database_url:
         raise ValueError("Missing database configuration")
     config = {"configurable": {"thread_id": str(uuid4())}}

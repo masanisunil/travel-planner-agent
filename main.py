@@ -2,6 +2,7 @@ from functools import lru_cache
 import os
 import operator
 from typing import Annotated
+from urllib.parse import quote
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -14,6 +15,29 @@ from pydantic import BaseModel, Field
 import psycopg
 
 load_dotenv()
+
+
+def get_database_url() -> str | None:
+    database_url = os.getenv("POSTGRES_URL") or os.getenv("POSTGRES_EXTERNAL_URL")
+    if database_url:
+        return database_url
+
+    required = {
+        "host": os.getenv("POSTGRES_HOST"),
+        "database": os.getenv("POSTGRES_DB"),
+        "user": os.getenv("POSTGRES_USER"),
+        "password": os.getenv("POSTGRES_PASSWORD"),
+    }
+    if not all(required.values()):
+        return None
+
+    user = quote(required["user"], safe="")
+    password = quote(required["password"], safe="")
+    database = quote(required["database"], safe="")
+    host = required["host"]
+    port = os.getenv("POSTGRES_PORT", "5432")
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+
 
 @lru_cache(maxsize=1)
 def get_llm() -> ChatGroq:
@@ -194,9 +218,9 @@ graph.add_edge("final_agent", END)
 
 
 def run_cli() -> int:
-    database_url = os.getenv("POSTGRES_URL")
+    database_url = get_database_url()
     if not database_url:
-        print("Set POSTGRES_URL in your local .env before running the CLI.")
+        print("Set POSTGRES_URL or the POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD variables.")
         return 1
     try:
         user_input = input("Enter your travel query: ").strip()

@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage
+from psycopg.conninfo import conninfo_to_dict
 
 import main
 
@@ -15,6 +16,39 @@ import main
 class TravelGraphTests(unittest.TestCase):
     def tearDown(self):
         main.get_llm.cache_clear()
+
+    def test_database_password_with_at_sign_is_encoded(self):
+        database_environment = {
+            "POSTGRES_HOST": "db",
+            "POSTGRES_PORT": "5432",
+            "POSTGRES_DB": "roam",
+            "POSTGRES_USER": "roam",
+            "POSTGRES_PASSWORD": "Sunil@572",
+        }
+        with patch.dict(os.environ, database_environment, clear=True):
+            connection_info = conninfo_to_dict(main.get_database_url())
+
+        self.assertEqual(connection_info["host"], "db")
+        self.assertEqual(connection_info["password"], "Sunil@572")
+
+    def test_explicit_postgres_url_takes_precedence(self):
+        with patch.dict(os.environ, {
+            "POSTGRES_URL": "postgresql://localhost/localdb",
+            "POSTGRES_HOST": "db",
+            "POSTGRES_PASSWORD": "unused",
+        }, clear=True):
+            self.assertEqual(
+                main.get_database_url(), "postgresql://localhost/localdb"
+            )
+
+    def test_external_postgres_url_is_used_when_set(self):
+        external_url = "postgresql://managed.example/roam"
+        with patch.dict(os.environ, {
+            "POSTGRES_EXTERNAL_URL": external_url,
+            "POSTGRES_HOST": "db",
+            "POSTGRES_PASSWORD": "unused",
+        }, clear=True):
+            self.assertEqual(main.get_database_url(), external_url)
 
     def test_research_is_parallel_and_joined_before_model_calls(self):
         barrier = Barrier(4)
