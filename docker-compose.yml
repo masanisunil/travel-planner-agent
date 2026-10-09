@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: .
+    image: roam-travel-planner:latest
+    restart: unless-stopped
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8501}:8501"
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY:?Set GROQ_API_KEY in .env}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-120b}
+      AVIATION_STACK_API_KEY: ${AVIATION_STACK_API_KEY:?Set AVIATION_STACK_API_KEY in .env}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:?Set TAVILY_API_KEY in .env}
+      POSTGRES_URL: postgresql://roam:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/roam
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: roam
+      POSTGRES_USER: roam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roam -d roam"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  postgres_data:

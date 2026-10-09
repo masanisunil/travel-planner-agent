@@ -1,0 +1,21 @@
+[theme]
+base = "light"
+primaryColor = "#16685b"
+backgroundColor = "#fbfcfa"
+secondaryBackgroundColor = "#f0f3f0"
+textColor = "#202b29"
+linkColor = "#16685b"
+borderColor = "#dce3de"
+showWidgetBorder = true
+showSidebarBorder = false
+baseRadius = "8px"
+buttonRadius = "6px"
+font = "'DM Sans':https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+headingFont = "'Manrope':https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+baseFontSize = 15
+headingFontSizes = ["36px", "26px", "20px", "18px", "16px", "14px"]
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+linkUnderline = false
+
+[client]
+toolbarMode = "minimal"
